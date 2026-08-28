@@ -1,30 +1,32 @@
 name: Checkout Proof
 
-on: [push, workflow_dispatch]
+on: 
+  push:
+  workflow_dispatch:  # This allows the manual trigger
 
 jobs:
   prove:
     runs-on: ubuntu-latest
     steps:
-      - name: Show folder before checkout
+      - name: Look around BEFORE checkout
         run: |
-          echo "Current path is:"
           pwd
-          echo "Contents before checkout:"
           ls -la
+          echo "Notice how the folder is almost completely empty!"
 
-      - name: Checkout repository
+      - name: Check out the repository
         uses: actions/checkout@v4
 
-      - name: Show folder after checkout
+      - name: Look around AFTER checkout
         run: |
-          echo "Contents after checkout:"
+          pwd
           ls -la
+          echo "Now your repository files are actually here."
 
-      - name: Count files after checkout
+      - name: Count how many files are present
         run: |
-          echo "Number of items now present:"
-          ls -l | wc -l
+          echo "Total files present:"
+          find . -type f | wc -l
 
       - name: Finish
         run: echo "Proof captured"
