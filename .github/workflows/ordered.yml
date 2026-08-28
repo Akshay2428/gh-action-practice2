@@ -1,0 +1,40 @@
+name: Ordered Pipeline
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Finish setup
+        run: echo "Setup done"
+
+  verify:
+    runs-on: ubuntu-latest
+    needs: setup  # Runs ONLY after setup succeeds
+    steps:
+      - name: Check out repo again
+        uses: actions/checkout@v4
+
+      - name: Print Node version
+        run: node --version
+
+      - name: Finish verify
+        run: echo "Verify done"
+
+  finish:
+    runs-on: ubuntu-latest
+    needs: verify  # Runs ONLY after verify succeeds
+    steps:
+      - name: Pipeline complete
+        run: echo "Pipeline finished"
