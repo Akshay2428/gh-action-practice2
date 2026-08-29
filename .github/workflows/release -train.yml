@@ -102,6 +102,9 @@ jobs:
   announce:
     needs: package
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
     steps:
       - name: Print release details
         run: |
