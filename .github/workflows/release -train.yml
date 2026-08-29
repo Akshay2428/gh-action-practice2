@@ -74,7 +74,7 @@ jobs:
           echo "BUILD TIME: $(date -u)" >> release/${{steps.release_ref.outputs.REF}}
 
       - name: copy a file from app folder
-        run: cp app/index.js release/
+        run:  cp index.js release/
 
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
