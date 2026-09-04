@@ -1,0 +1,145 @@
+name: Incident Switchboard
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      severity:
+        description: 'Severity level'
+        type: choice
+        options:
+          - low
+          - medium
+          - high
+        default: low
+      deep_scan:
+        description: 'run a deep scan'
+        type: boolean
+        default: false
+      skip_tests:
+        description: 'skip tests'
+        type: boolean
+        default: false
+      reason:
+        description: 'Reason for this run'
+        type: string
+
+run-name: >-
+  ${{
+    github.event_name == 'workflow_dispatch'
+    && format('{0}{1}', upper(github.event.inputs.severity), (github.event.inputs.deep_scan == 'true' && ' SCAN' || ''))
+    || format('{0} triggered by {1}', github.event_name, github.actor)
+  }}
+
+jobs:
+    triage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print run context
+        run: |
+          echo "Event: ${{ github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Actor: ${{ github.actor }}"
+          echo "Run number: ${{ github.run_number }}"
+
+      - name: Print manual dispatch details
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "Severity: ${{ github.event.inputs.severity }}"
+          echo "Deep scan requested: ${{ github.event.inputs.deep_scan }}"
+          echo "Skip tests requested: ${{ github.event.inputs.skip_tests }}"
+          echo "Reason: ${{ github.event.inputs.reason }}"
+
+      - name: Print automatic run message
+        if: github.event_name != 'workflow_dispatch'
+        run: echo "This was an automatic run, no reason supplied"
+
+      - name: Low severity message
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.severity == 'low'
+        run: echo "Low severity incident — routine handling"
+
+      - name: Medium severity message
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.severity == 'medium'
+        run: echo "Medium severity incident — attention needed"
+
+      - name: High severity message
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.severity == 'high'
+        run: echo "High severity incident — immediate response required"
+
+  tests:
+    needs: triage
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      github.event.inputs.skip_tests != 'true'
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+  scan:
+    needs: triage
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.inputs.deep_scan == 'true' ||
+      github.event.inputs.severity == 'high'
+    steps:
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Write scan.json
+        run: |
+          cat <<EOF > scan.json
+          {
+            "severity": "${{ github.event.inputs.severity }}",
+            "deep_scan": "${{ github.event.inputs.deep_scan }}",
+            "actor": "${{ github.actor }}",
+            "run_number": "${{ github.run_number }}",
+            "time_utc": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          }
+          EOF
+          cat scan.json
+
+      - name: Read values back with jq
+        run: |
+          echo "Severity from file: $(jq -r '.severity' scan.json)"
+          echo "Actor from file: $(jq -r '.actor' scan.json)"
+
+  report:
+    needs: [tests, scan]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Print job results
+        run: |
+          echo "Tests job: ${{ needs.tests.result }}"
+          echo "Scan job: ${{ needs.scan.result }}"
+
+      - name: Print overall summary
+        if: needs.tests.result == 'failure' || needs.scan.result == 'failure'
+        run: echo "Summary: one or more checks failed — review before closing incident"
+
+      - name: Print overall summary (clean)
+        if: needs.tests.result != 'failure' && needs.scan.result != 'failure'
+        run: echo "Summary: all checks that ran completed successfully"
+
+      - name: Finish
+        run: echo "Switchboard closed"
